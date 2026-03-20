@@ -15,7 +15,7 @@ def execute_benchmark_and_visualize():
     print(f"Data acquired. X_train dimensions: {X_train.shape}")
     print("-" * 30)
 
-    # 2. Model Initialization (with fixed random_state for reproducibility)
+    # 2. Model Initialization (with fixed random_state for reproducibility, delete the random state options if not required)
     models = {
         "Catch22\n(Feature-Based)": Catch22Classifier(random_state=42),
         "ROCKET\n(Convolution-Based)": RocketClassifier(n_kernels=10000, random_state=42)
