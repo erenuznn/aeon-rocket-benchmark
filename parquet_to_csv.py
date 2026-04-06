@@ -3,6 +3,7 @@ import pyarrow
 from pathlib import Path
 import numpy as np
 
+
 def execute_chunking(raw_data_path, days_per_chunk):
     if not (1 <= days_per_chunk <= 12):
         raise ValueError("Termination: The parameter DAYS_PER_CHUNK must be between 1 and 12.")
@@ -13,12 +14,15 @@ def execute_chunking(raw_data_path, days_per_chunk):
 
     plant_data = {}
 
+    # Unilateral recursive search for all .parquet files in month/day subfolders
     for parquet_file in root.rglob("*.parquet"):
         plant_id = parquet_file.parent.name
         df = pd.read_parquet(parquet_file)
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+
         if "timezone" in df.columns:
             df["timestamp"] = df["timestamp"] + pd.to_timedelta(df["timezone"], unit="h")
+
         df = df[["timestamp", "metric_value"]]
 
         if plant_id not in plant_data:
@@ -29,6 +33,7 @@ def execute_chunking(raw_data_path, days_per_chunk):
     ROWS_PER_CHUNK = days_per_chunk * 24 * 60 * 60
     print(f"INFO: Parameter set to {days_per_chunk} day(s). Each CSV chunk will contain up to {ROWS_PER_CHUNK:,} rows.")
 
+    # Iterate through every plant found in the month/day tree
     for plant_id, df in plant_data.items():
         df = df.drop_duplicates(subset="timestamp").sort_values("timestamp")
         total_rows = len(df)
@@ -44,12 +49,14 @@ def execute_chunking(raw_data_path, days_per_chunk):
             end_index = (i + 1) * ROWS_PER_CHUNK
             chunk_df = df.iloc[start_index:end_index]
 
+            if chunk_df.empty:
+                continue
+
             start_date = chunk_df["timestamp"].iloc[0].strftime('%Y%m%d')
             end_date = chunk_df["timestamp"].iloc[-1].strftime('%Y%m%d')
 
             output_file = plant_output_dir / f"{plant_id}_chunk{i + 1}_{start_date}_to_{end_date}.csv"
 
-            # File existence verification
             if output_file.exists():
                 print(f"  -> File exists. Skipping {i + 1}/{num_chunks}: {output_file.name}")
                 continue
@@ -57,9 +64,11 @@ def execute_chunking(raw_data_path, days_per_chunk):
             chunk_df.to_csv(output_file, index=False)
             print(f"  -> Created file {i + 1}/{num_chunks}: {output_file.name} (Rows: {len(chunk_df):,})")
 
-        print(f"Partitioned {days_per_chunk}-day CSV chunks successfully created for each plant!")
+        print(f"Partitioned {days_per_chunk}-day CSV chunks successfully created for {plant_id}!")
 
-        return output_dir
+    # Return statement is now OUTSIDE the loop to allow processing of all 24 plants
+    return output_dir
 
-    if __name__ == "__main__":
-        execute_chunking("/Users/erenuzun/Desktop/Thesis/ML/DATA/test_data/vivent46/1sec", 12)
+
+if __name__ == "__main__":
+    execute_chunking("/Users/erenuzun/Desktop/Thesis/ML/DATA/test_data/vivent46/1sec", 12)
